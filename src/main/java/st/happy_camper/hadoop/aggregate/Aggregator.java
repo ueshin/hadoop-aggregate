@@ -16,7 +16,11 @@
 package st.happy_camper.hadoop.aggregate;
 
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -49,7 +53,9 @@ public class Aggregator extends Configured implements Tool {
             Mapper<LongWritable, Text, AccessWritable, IntWritable> {
 
         private static final Pattern PATTERN = Pattern
-                .compile("^(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}) .*\"GET (/[^ ]*) .*$");
+                .compile("^(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}) .* "
+                        + "\\[(\\d{2}/[A-Z][a-z][a-z]/\\d{4}):\\d{2}:\\d{2}:\\d{2} [-+]\\d{4}\\] "
+                        + "\"GET ((?:/[^ ]*)?/(?:[^/]+\\.html)?) HTTP/1\\.[01]\" (?:200|304) .*$");
 
         private static final AccessWritable access = new AccessWritable();
 
@@ -69,9 +75,20 @@ public class Aggregator extends Configured implements Tool {
             String line = value.toString();
             Matcher matcher = PATTERN.matcher(line);
             if(matcher.matches()) {
-                access
-                        .setAccess(new Access(matcher.group(1), matcher
-                                .group(2)));
+                try {
+                    String ip = matcher.group(1);
+                    String url = matcher.group(3);
+                    if(url.endsWith("/")) {
+                        url = url + "index.html";
+                    }
+                    Date accessDate = new SimpleDateFormat("dd/MMM/yyyy",
+                            Locale.US).parse(matcher.group(2));
+                    access.setAccess(new Access(ip, url, accessDate));
+                }
+                catch(ParseException e) {
+                    e.printStackTrace();
+                    return;
+                }
                 output.collect(access, one);
             }
         }
@@ -124,8 +141,10 @@ public class Aggregator extends Configured implements Tool {
             while(values.hasNext()) {
                 sum += values.next().get();
             }
-            output.collect(new Text(String.format("%s\t%s", key.getAccess()
-                    .getIp(), key.getAccess().getUrl())), new IntWritable(sum));
+            output.collect(new Text(String.format("%s\t%s\t%s", key.getAccess()
+                    .getIp(), key.getAccess().getUrl(), new SimpleDateFormat(
+                    "yyyy/MM/dd").format(key.getAccess().getAccessDate()))),
+                    new IntWritable(sum));
         }
     }
 

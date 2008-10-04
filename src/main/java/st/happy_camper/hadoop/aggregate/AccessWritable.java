@@ -18,6 +18,7 @@ package st.happy_camper.hadoop.aggregate;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Date;
 
 import org.apache.hadoop.io.WritableComparable;
 
@@ -62,7 +63,7 @@ public class AccessWritable implements WritableComparable<AccessWritable> {
      * @see org.apache.hadoop.io.Writable#readFields(java.io.DataInput)
      */
     public void readFields(DataInput in) throws IOException {
-        access = new Access(in.readUTF(), in.readUTF());
+        access = new Access(in.readUTF(), in.readUTF(), new Date(in.readLong()));
     }
 
     /*
@@ -73,6 +74,7 @@ public class AccessWritable implements WritableComparable<AccessWritable> {
     public void write(DataOutput out) throws IOException {
         out.writeUTF(access.getIp());
         out.writeUTF(access.getUrl());
+        out.writeLong(access.getAccessDate().getTime());
     }
 
     /*

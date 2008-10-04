@@ -15,6 +15,10 @@
  */
 package st.happy_camper.hadoop.aggregate;
 
+import java.util.Date;
+
+import org.apache.commons.lang.builder.CompareToBuilder;
+
 /**
  * @author ueshin
  */
@@ -24,13 +28,17 @@ public class Access implements Comparable<Access> {
 
     private final String url;
 
+    private final Date accessDate;
+
     /**
      * @param ip
      * @param url
+     * @param accessDate
      */
-    public Access(String ip, String url) {
+    public Access(String ip, String url, Date accessDate) {
         this.ip = ip;
         this.url = url;
+        this.accessDate = accessDate;
     }
 
     /**
@@ -47,6 +55,13 @@ public class Access implements Comparable<Access> {
         return url;
     }
 
+    /**
+     * @return the accessDate
+     */
+    public Date getAccessDate() {
+        return accessDate;
+    }
+
     /*
      * (non-Javadoc)
      * 
@@ -54,28 +69,9 @@ public class Access implements Comparable<Access> {
      */
     @Override
     public int compareTo(Access o) {
-        if(o == null) {
-            throw new NullPointerException();
-        }
-        else {
-            int ip = getIp().compareTo(o.getIp());
-            if(ip != 0) {
-                return ip;
-            }
-            else {
-                return getUrl().compareTo(o.getUrl());
-            }
-        }
-    }
-
-    /*
-     * (non-Javadoc)
-     * 
-     * @see java.lang.Object#toString()
-     */
-    @Override
-    public String toString() {
-        return String.format(" [%s, %s]", getIp(), getUrl());
+        return new CompareToBuilder().append(ip, o.getIp()).append(url,
+                o.getUrl()).append(accessDate, o.getAccessDate())
+                .toComparison();
     }
 
 }

@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,15 +28,11 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.FileOutputFormat;
-import org.apache.hadoop.mapred.JobClient;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.MapReduceBase;
-import org.apache.hadoop.mapred.Mapper;
-import org.apache.hadoop.mapred.OutputCollector;
-import org.apache.hadoop.mapred.Reducer;
-import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
@@ -49,7 +44,7 @@ public class Aggregator extends Configured implements Tool {
     /**
      * @author ueshin
      */
-    private static class Map extends MapReduceBase implements
+    private static class Map extends
             Mapper<LongWritable, Text, AccessWritable, IntWritable> {
 
         private static final Pattern PATTERN = Pattern
@@ -57,21 +52,18 @@ public class Aggregator extends Configured implements Tool {
                         + "\\[(\\d{2}/[A-Z][a-z][a-z]/\\d{4}):\\d{2}:\\d{2}:\\d{2} [-+]\\d{4}\\] "
                         + "\"GET ((?:/[^ ]*)?/(?:[^/]+\\.html)?) HTTP/1\\.[01]\" (?:200|304) .*$");
 
-        private static final AccessWritable access = new AccessWritable();
+        private final AccessWritable access = new AccessWritable();
 
-        private static final IntWritable one = new IntWritable(1);
+        private final IntWritable one = new IntWritable(1);
 
         /*
          * (non-Javadoc)
-         * 
-         * @see org.apache.hadoop.mapred.Mapper#map(java.lang.Object,
-         * java.lang.Object, org.apache.hadoop.mapred.OutputCollector,
-         * org.apache.hadoop.mapred.Reporter)
+         * @see org.apache.hadoop.mapreduce.Mapper#map(KEYIN, VALUEIN,
+         * org.apache.hadoop.mapreduce.Mapper.Context)
          */
         @Override
-        public void map(LongWritable key, Text value,
-                OutputCollector<AccessWritable, IntWritable> output,
-                Reporter reporter) throws IOException {
+        protected void map(LongWritable key, Text value, Context context)
+                throws IOException, InterruptedException {
             String line = value.toString();
             Matcher matcher = PATTERN.matcher(line);
             if(matcher.matches()) {
@@ -89,7 +81,7 @@ public class Aggregator extends Configured implements Tool {
                     e.printStackTrace();
                     return;
                 }
-                output.collect(access, one);
+                context.write(access, one);
             }
         }
     }
@@ -97,25 +89,22 @@ public class Aggregator extends Configured implements Tool {
     /**
      * @author ueshin
      */
-    private static class Combine extends MapReduceBase implements
+    private static class Combine extends
             Reducer<AccessWritable, IntWritable, AccessWritable, IntWritable> {
 
         /*
          * (non-Javadoc)
-         * 
-         * @see org.apache.hadoop.mapred.Reducer#reduce(java.lang.Object,
-         * java.util.Iterator, org.apache.hadoop.mapred.OutputCollector,
-         * org.apache.hadoop.mapred.Reporter)
+         * @see org.apache.hadoop.mapreduce.Reducer#reduce(KEYIN,
+         * java.lang.Iterable, org.apache.hadoop.mapreduce.Reducer.Context)
          */
         @Override
-        public void reduce(AccessWritable key, Iterator<IntWritable> values,
-                OutputCollector<AccessWritable, IntWritable> output,
-                Reporter reporter) throws IOException {
+        public void reduce(AccessWritable key, Iterable<IntWritable> values,
+                Context context) throws IOException, InterruptedException {
             int sum = 0;
-            while(values.hasNext()) {
-                sum += values.next().get();
+            for(IntWritable value : values) {
+                sum += value.get();
             }
-            output.collect(key, new IntWritable(sum));
+            context.write(key, new IntWritable(sum));
         }
 
     }
@@ -123,25 +112,23 @@ public class Aggregator extends Configured implements Tool {
     /**
      * @author ueshin
      */
-    private static class Reduce extends MapReduceBase implements
+    private static class Reduce extends
             Reducer<AccessWritable, IntWritable, Text, IntWritable> {
 
         /*
          * (non-Javadoc)
-         * 
          * @see org.apache.hadoop.mapred.Reducer#reduce(java.lang.Object,
          * java.util.Iterator, org.apache.hadoop.mapred.OutputCollector,
          * org.apache.hadoop.mapred.Reporter)
          */
         @Override
-        public void reduce(AccessWritable key, Iterator<IntWritable> values,
-                OutputCollector<Text, IntWritable> output, Reporter reporter)
-                throws IOException {
+        public void reduce(AccessWritable key, Iterable<IntWritable> values,
+                Context context) throws IOException, InterruptedException {
             int sum = 0;
-            while(values.hasNext()) {
-                sum += values.next().get();
+            for(IntWritable value : values) {
+                sum += value.get();
             }
-            output.collect(new Text(String.format("%s\t%s\t%s", key.getAccess()
+            context.write(new Text(String.format("%s\t%s\t%s", key.getAccess()
                     .getIp(), key.getAccess().getUrl(), new SimpleDateFormat(
                     "yyyy/MM/dd").format(key.getAccess().getAccessDate()))),
                     new IntWritable(sum));
@@ -150,24 +137,26 @@ public class Aggregator extends Configured implements Tool {
 
     /*
      * (non-Javadoc)
-     * 
      * @see org.apache.hadoop.util.Tool#run(java.lang.String[])
      */
     public int run(String[] args) throws Exception {
-        JobConf conf = new JobConf(getConf(), getClass());
-        conf.setJobName("aggregator");
+        Job job = new Job(getConf(), "aggregator");
 
-        FileInputFormat.setInputPaths(conf, args[0]);
-        FileOutputFormat.setOutputPath(conf, new Path(args[1]));
+        FileInputFormat.setInputPaths(job, args[0]);
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
-        conf.setMapperClass(Map.class);
-        conf.setCombinerClass(Combine.class);
-        conf.setReducerClass(Reduce.class);
+        job.setMapperClass(Map.class);
+        job.setCombinerClass(Combine.class);
+        job.setReducerClass(Reduce.class);
 
-        conf.setOutputKeyClass(AccessWritable.class);
-        conf.setOutputValueClass(IntWritable.class);
+        job.setMapOutputKeyClass(AccessWritable.class);
+        job.setMapOutputValueClass(IntWritable.class);
 
-        JobClient.runJob(conf);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+
+        job.waitForCompletion(true);
+
         return 0;
     }
 

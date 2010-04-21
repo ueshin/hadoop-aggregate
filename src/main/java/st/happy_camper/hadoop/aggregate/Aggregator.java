@@ -62,7 +62,7 @@ public class Aggregator extends Configured implements Tool {
          * org.apache.hadoop.mapreduce.Mapper.Context)
          */
         @Override
-        protected void map(LongWritable key, Text value, Context context)
+        public void map(LongWritable key, Text value, Context context)
                 throws IOException, InterruptedException {
             String line = value.toString();
             Matcher matcher = PATTERN.matcher(line);

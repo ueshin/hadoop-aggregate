@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Date;
 
 import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.WritableUtils;
 
 /**
  * @author ueshin
@@ -59,27 +60,25 @@ public class AccessWritable implements WritableComparable<AccessWritable> {
 
     /*
      * (non-Javadoc)
-     * 
      * @see org.apache.hadoop.io.Writable#readFields(java.io.DataInput)
      */
     public void readFields(DataInput in) throws IOException {
-        access = new Access(in.readUTF(), in.readUTF(), new Date(in.readLong()));
+        access = new Access(WritableUtils.readString(in), WritableUtils
+                .readString(in), new Date(WritableUtils.readVLong(in)));
     }
 
     /*
      * (non-Javadoc)
-     * 
      * @see org.apache.hadoop.io.Writable#write(java.io.DataOutput)
      */
     public void write(DataOutput out) throws IOException {
-        out.writeUTF(access.getIp());
-        out.writeUTF(access.getUrl());
-        out.writeLong(access.getAccessDate().getTime());
+        WritableUtils.writeString(out, access.getIp());
+        WritableUtils.writeString(out, access.getUrl());
+        WritableUtils.writeVLong(out, access.getAccessDate().getTime());
     }
 
     /*
      * (non-Javadoc)
-     * 
      * @see java.lang.Comparable#compareTo(java.lang.Object)
      */
     @Override

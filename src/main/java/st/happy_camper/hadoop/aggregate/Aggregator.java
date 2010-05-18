@@ -142,6 +142,8 @@ public class Aggregator extends Configured implements Tool {
     public int run(String[] args) throws Exception {
         Job job = new Job(getConf(), "aggregator");
 
+        job.setJarByClass(getClass());
+
         FileInputFormat.setInputPaths(job, args[0]);
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
